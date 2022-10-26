@@ -1,0 +1,19 @@
+# VSCode
+.vscode
+
+# PHPStorm
+.idea
+
+# Dependencies
+vendor
+composer.lock
+
+# PHPCS
+.phpcs-cache
+
+# PHPUnit
+.phpunit.result.cache
+
+# Dev
+public/
+modules/
