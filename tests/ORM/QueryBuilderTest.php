@@ -99,4 +99,87 @@ class QueryBuilderTest extends TestCase
         ], 'o', 'LEFT')->getQuery();
         $this->assertEquals('SELECT id, name FROM test_table AS t LEFT JOIN other_table AS o ON t.id_other = o.id', $query);
     }
+
+    public function testInsert()
+    {
+        $query = (new QueryBuilder())->insertInto('users')->values([
+            'name' => 'Hello',
+            'firstname' => 'World',
+            'age' => 34
+        ])->getQuery();
+        $this->assertEquals('INSERT INTO users (name, firstname, age) VALUES ("Hello", "World", "34")', $query);
+
+        $query = (new QueryBuilder())->insertInto('users', 'u')->values([
+            'u.name' => 'Hello',
+            'u.firstname' => 'World',
+            'u.age' => 34
+        ])->getQuery();
+        $this->assertEquals('INSERT INTO users AS u (u.name, u.firstname, u.age) VALUES ("Hello", "World", "34")', $query);
+
+        $query = (new QueryBuilder())->insertInto('users')->values([
+            'name' => ':name',
+            'firstname' => ':firstname',
+            'age' => ':age'
+        ])->getQuery();
+        $this->assertEquals('INSERT INTO users (name, firstname, age) VALUES (:name, :firstname, :age)', $query);
+
+        $query = (new QueryBuilder())->insertInto('users')->values([
+            'name' => '?',
+            'firstname' => '?',
+            'age' => '?'
+        ])->getQuery();
+        $this->assertEquals('INSERT INTO users (name, firstname, age) VALUES (?, ?, ?)', $query);
+
+        $query = (new QueryBuilder())->insertInto('users')->values([
+            'name' => '?',
+            'firstname' => '?',
+            'age' => '?'
+        ])->getQuery();
+        $this->assertEquals('INSERT INTO users (name, firstname, age) VALUES (?, ?, ?)', $query);
+    }
+
+    public function testUpdate()
+    {
+        $query = (new QueryBuilder())->update('users')->values([
+            'name' => 'Hello',
+            'firstname' => 'World',
+            'age' => 34
+        ])->where([
+            'id' => ':id'
+        ])->getQuery();
+        $this->assertEquals('UPDATE users SET name = "Hello", firstname = "World", age = "34" WHERE id = :id', $query);
+
+        $query = (new QueryBuilder())->update('users', 'u')->values([
+            'u.name' => 'Hello',
+            'u.firstname' => 'World',
+            'u.age' => 34
+        ])->where([
+            'u.id' => ':id',
+        ])->getQuery();
+        $this->assertEquals('UPDATE users AS u SET u.name = "Hello", u.firstname = "World", u.age = "34" WHERE u.id = :id', $query);
+
+        $query = (new QueryBuilder())->update('u')->from('users', 'u')->values([
+            'u.name' => 'Hello',
+            'u.firstname' => 'World',
+            'u.age' => 34
+        ])->join('profil', [
+            ['p.id', '=', 'u.id_profil']
+        ], 'p')->where([
+            'u.id' => ':id',
+            'p.id' => 3
+        ])->getQuery();
+        $this->assertEquals('UPDATE u FROM users AS u INNER JOIN profil AS p ON p.id = u.id_profil SET u.name = "Hello", u.firstname = "World", u.age = "34" WHERE u.id = :id AND p.id = 3', $query);
+
+        $query = (new QueryBuilder())->update('u')->from('users', 'u')->values([
+            'u.name' => ':name',
+            'u.firstname' => ':firstname',
+            'u.age' => ':age'
+        ])->join('profil', [
+            ['p.id', '=', 'u.id_profil']
+        ], 'p')->where([
+            'u.id' => ':id',
+            'p.id' => 3
+        ])->getQuery();
+        $this->assertEquals('UPDATE u FROM users AS u INNER JOIN profil AS p ON p.id = u.id_profil SET u.name = :name, u.firstname = :firstname, u.age = :age WHERE u.id = :id AND p.id = 3', $query);
+    }
 }

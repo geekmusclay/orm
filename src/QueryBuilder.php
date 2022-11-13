@@ -8,6 +8,7 @@ use Exception;
 
 use function array_merge;
 use function count;
+use function strpos;
 use function strtoupper;
 use function trim;
 
@@ -15,6 +16,15 @@ class QueryBuilder
 {
     /** @var string[] $selects The properties to be selected in the query */
     private array $selects = [];
+
+    /** @var string|null $insert The name of the table where the data should be inserted  */
+    private ?string $insert = null;
+
+    /** @var array<string, string> $values Table of values to be inserted */
+    private array $values = [];
+
+    /** @var string|null $update The name of the table that will be updated */
+    private ?string $update = null;
 
     /** @var string|null $from Table targted by the query */
     private ?string $from = null;
@@ -55,6 +65,38 @@ class QueryBuilder
     }
 
     /**
+     * Defines the table where the data should be inserted
+     *
+     * @param string      $table Targeted table
+     * @param string|null $name  The name of the table
+     */
+    public function insertInto(string $table, ?string $name = null): self
+    {
+        if (null !== $name) {
+            $table .= ' AS ' . $name;
+        }
+        $this->insert = $table;
+
+        return $this;
+    }
+
+    /**
+     * Defines the table where the data should be updated
+     *
+     * @param string      $table Targeted table
+     * @param string|null $name  The name of the table
+     */
+    public function update(string $table, ?string $name = null): self
+    {
+        if (null !== $name) {
+            $table .= ' AS ' . $name;
+        }
+        $this->update = $table;
+
+        return $this;
+    }
+
+    /**
      * Defines the table targeted by the query.
      *
      * @param string $target Targeted table
@@ -73,13 +115,17 @@ class QueryBuilder
     /**
      * Add a table join. By defautl an inner join.
      *
-     * @param string      $table      Table to join
-     * @param array       $conditions The ON conditions for the join
-     * @param string|null $name       The name of the joinned table
-     * @param string      $type       Type of join
+     * @param string               $table      Table to join
+     * @param array<array<string>> $conditions The ON conditions for the join
+     * @param string|null          $name       The name of the joinned table
+     * @param string               $type       Type of join
      */
-    public function join(string $table, array $conditions, ?string $name = null, string $type = 'INNER'): self
-    {
+    public function join(
+        string $table,
+        array $conditions,
+        ?string $name = null,
+        string $type = 'INNER'
+    ): self {
         if (0 === count($conditions)) {
             throw new Exception('No conditions');
         }
@@ -109,9 +155,21 @@ class QueryBuilder
     }
 
     /**
+     * Add values for insert or update queries
+     *
+     * @param array<string, string> $values The values to insert or update
+     */
+    public function values(array $values): self
+    {
+        $this->values = array_merge($this->values, $values);
+
+        return $this;
+    }
+
+    /**
      * Define conditions to get results from the query.
      *
-     * @param array $condtions Conditions to get results
+     * @param array<string, mixed> $condtions Conditions to get results
      */
     public function where(array $condtions): self
     {
@@ -153,22 +211,38 @@ class QueryBuilder
      */
     public function getQuery(): string
     {
-        if (0 === count($this->selects)) {
-            throw new Exception('No properties selected');
+        if (0 !== count($this->selects)) {
+            return $this->buildSelectQuery();
         }
+
+        if (null !== $this->insert) {
+            return $this->buildInsertQuery();
+        }
+
+        if (null !== $this->update) {
+            return $this->buildUpdateQuery();
+        }
+
+        throw new Exception('Wrong query construction.');
+    }
+
+    /**
+     * Will build the select query
+     *
+     * @return string The query built
+     */
+    private function buildSelectQuery(): string
+    {
         $query = 'SELECT ';
 
-        // We disable verification of the following lines due to rule conflicts.
-        // phpcs:disable
         $count = count($this->selects);
         for ($i = 0; $i < $count; $i++) {
-            if ($i === ($count - 1)) {
+            if ($i === $count - 1) {
                 $query .= $this->selects[$i] . ' ';
             } else {
                 $query .= $this->selects[$i] . ', ';
             }
         }
-        // phpcs:enable
 
         if (null === $this->from) {
             throw new Exception('No target table set');
@@ -181,17 +255,7 @@ class QueryBuilder
             }
         }
 
-        if (0 !== count($this->wheres)) {
-            $where = 'WHERE ';
-            foreach ($this->wheres as $property => $value) {
-                if ($where === 'WHERE ') {
-                    $where .= $property . ' = ' . $value . ' ';
-                } else {
-                    $where .= 'AND ' . $property . ' = ' . $value . ' ';
-                }
-            }
-            $query .= $where;
-        }
+        $query .= $this->buildWhereCondition();
 
         if (null !== $this->order) {
             $query .= 'ORDER BY ' . $this->order . ' ' . $this->direction . ' ';
@@ -202,5 +266,124 @@ class QueryBuilder
         }
 
         return trim($query);
+    }
+
+    /**
+     * Will build the insert query
+     *
+     * @return string The query built
+     */
+    private function buildInsertQuery(): string
+    {
+        $query = 'INSERT INTO ' . $this->insert;
+
+        $properties = '(';
+        $values     = '(';
+        $index      = 1;
+        $total      = count($this->values);
+        foreach ($this->values as $property => $value) {
+            if ('?' === $value || false !== strpos((string) $value, ':')) {
+                $values .= $value;
+            } else {
+                $values .= '"' . $value . '"';
+            }
+            $properties .= $property;
+
+            if ($index !== $total) {
+                $properties .= ', ';
+                $values     .= ', ';
+            }
+            ++$index;
+        }
+        $properties .= ')';
+        $values     .= ')';
+
+        $query .= ' ' . $properties . ' VALUES ' . $values;
+
+        return trim($query);
+    }
+
+    /**
+     * Will build the update query
+     *
+     * @return string The query built
+     */
+    private function buildUpdateQuery(): string
+    {
+        $query = 'UPDATE ' . $this->update . ' ';
+
+        if (null !== $this->from) {
+            $query .= 'FROM ' . $this->from . ' ';
+        }
+
+        if (0 !== count($this->joins)) {
+            foreach ($this->joins as $join) {
+                $query .= $join . ' ';
+            }
+        }
+        $query .= 'SET ';
+
+        $index = 1;
+        $total = count($this->values);
+        foreach ($this->values as $property => $value) {
+            if ('?' === $value || false !== strpos((string) $value, ':')) {
+                $query .= $property . ' = ' . $value;
+            } else {
+                $query .= $property . ' = "' . $value . '"';
+            }
+
+            if ($index !== $total) {
+                $query .= ', ';
+            } else {
+                $query .= ' ';
+            }
+            ++$index;
+        }
+
+        $query .= $this->buildWhereCondition();
+
+        return trim($query);
+    }
+
+    /**
+     * Will build the where condition for query
+     *
+     * @return string The where condition built
+     */
+    private function buildWhereCondition(): ?string
+    {
+        if (0 === count($this->wheres)) {
+            return null;
+        }
+
+        $where = 'WHERE ';
+        foreach ($this->wheres as $property => $value) {
+            if ($where === 'WHERE ') {
+                $where .= $property . ' = ' . $value . ' ';
+            } else {
+                $where .= 'AND ' . $property . ' = ' . $value . ' ';
+            }
+        }
+
+        return $where;
+    }
+
+    /**
+     * Flush all stored data
+     */
+    public function flush(): self
+    {
+        $this->selects   = [];
+        $this->insert    = null;
+        $this->values    = [];
+        $this->update    = null;
+        $this->from      = null;
+        $this->joins     = [];
+        $this->wheres    = [];
+        $this->order     = null;
+        $this->direction = 'ASC';
+        $this->limit     = null;
+
+        return $this;
     }
 }
