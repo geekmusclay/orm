@@ -30,4 +30,20 @@ class EntityTest extends TestCase
         $this->assertEquals(true, $entity->getBool());
         $this->assertEquals([ 'message' => 'Hello World' ], $entity->getConfig());
     }
+
+    public function testSerilization()
+    {
+        $entity = new FakeEntity([
+            'id'        => 1,
+            'firstname' => 'Hello',
+            'lastname'  => 'World',
+            'bool'      => true,
+            'config'    => [ 'message' => 'Hello World' ]
+        ]);
+        $json = $entity->serialize();
+        $this->assertEquals('{"id":1,"firstname":"Hello","lastname":"World","bool":true,"config":{"message":"Hello World"}}', $json);
+
+        $json = $entity->serialize(['config']);
+        $this->assertEquals('{"id":1,"firstname":"Hello","lastname":"World","bool":true}', $json);
+    }
 }

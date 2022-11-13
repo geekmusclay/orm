@@ -2,7 +2,7 @@
 
 namespace Geekmusclay\ORM\Tests\Fake;
 
-use Geekmusclay\ORM\AbstractEntity;
+use Geekmusclay\ORM\Common\AbstractEntity;
 
 class FakeEntity extends AbstractEntity
 {
