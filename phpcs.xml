@@ -18,7 +18,9 @@
     <rule ref="LaminasCodingStandard"/>
 
     <!-- Our base rule: set to PSR12-->
-    <rule ref="PSR12"/>
+    <rule ref="PSR12">
+        <exclude name="PSR2.ControlStructures.ElseIfDeclaration" />
+    </rule>
     <rule ref="PSR1"/>
     <rule ref="Zend.Files.ClosingTag"/>
 
